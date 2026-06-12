@@ -30,11 +30,6 @@ CREATE TABLE ods_trade_record(
 );
 
 
-
-
-
-
-
 -- ==========================================
 -- 市场价格表
 DROP TABLE IF EXISTS ods_market_price;

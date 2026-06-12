@@ -30,6 +30,8 @@ from engine.profit_engine import ProfitEngine
 from engine.allocation_engine_v2 import AllocationEngine
 from engine.allocation_category_engine_v2 import AllocationCategoryEngine
 
+from engine.floating_profit_engine import FloatingProfitEngine
+
 from engine.ma_factor_engine import MAFactorEngine
 from engine.rsi_factor_engine import RSIFactorEngine
 from engine.drawdown_engine import DrawdownEngine
@@ -43,6 +45,8 @@ from engine.add_position_engine import AddPositionEngine
 from engine.rebalance_engine import RebalanceEngine
 
 from engine.rebalance_engine_v2 import RebalanceEngineV2
+
+from engine.dashboard_engine import DashboardEngine
 
 class DailyRunner:
 
@@ -80,9 +84,16 @@ class DailyRunner:
         print("ETF分析平台每日任务")
         print("=" * 100)
 
+
+        self.run_step(
+            "持仓成本计算",
+            lambda: CostEngine().run()
+        )
+
         # ==================================================
         # ODS
         # ==================================================
+        
 
         self.run_step(
             "ETF实时行情更新",
@@ -99,11 +110,6 @@ class DailyRunner:
         # ==================================================
 
         self.run_step(
-            "持仓成本计算",
-            lambda: CostEngine().run()
-        )
-
-        self.run_step(
             "收益分析",
             lambda: ProfitEngine().run()
         )
@@ -116,6 +122,10 @@ class DailyRunner:
         self.run_step(
             "主题仓位分析",
             lambda: AllocationCategoryEngine().run()
+        )
+        self.run_step(
+            "浮动盈亏分析",
+            lambda: FloatingProfitEngine().run()
         )
 
         # ==================================================
@@ -164,6 +174,10 @@ class DailyRunner:
         "仓位再平衡",
             lambda: RebalanceEngineV2().run()
         )
+        self.run_step(
+        "投资驾驶舱",
+        lambda: DashboardEngine().run()
+    )
 
         print()
         print("=" * 100)
