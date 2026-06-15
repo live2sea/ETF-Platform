@@ -7,6 +7,7 @@ import os
 import sys
 import sqlite3
 import pandas as pd
+import numpy as np
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -53,10 +54,13 @@ class FloatingProfitEngine(BaseEngine):
             print(miss_df[["etf_code", "etf_name"]])
 
         # 核心计算
-        df["cost_value"] = df["quantity"] * df["avg_cost"]
-        df["market_value"] = df["quantity"] * df["current_price"]
+        # 先转 float 防止 NaN/Object 类型问题
+        df["cost_value"] = pd.to_numeric(df["quantity"] * df["avg_cost"], errors="coerce")
+        df["market_value"] = pd.to_numeric(df["quantity"] * df["current_price"], errors="coerce")
         df["floating_profit"] = df["market_value"] - df["cost_value"]
-        df["floating_profit_pct"] = (df["floating_profit"] / df["cost_value"] * 100).round(2)
+        # 安全计算百分比：分母为 0 时返回 0
+        pct = np.where(df["cost_value"] > 0, df["floating_profit"] / df["cost_value"] * 100, 0)
+        df["floating_profit_pct"] = pd.Series(pct).round(2)
         df["floating_profit"] = df["floating_profit"].round(2)
         df["cost_value"] = df["cost_value"].round(2)
         df["market_value"] = df["market_value"].round(2)
@@ -97,7 +101,7 @@ class FloatingProfitEngine(BaseEngine):
         total_cost = df["cost_value"].sum()
         total_market = df["market_value"].sum()
         total_profit = total_market - total_cost
-        total_pct = total_profit / total_cost * 100
+        total_pct = total_profit / total_cost * 100 if total_cost > 0 else 0
 
         print("=" * 100)
         print("账户汇总")

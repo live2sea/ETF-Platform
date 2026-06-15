@@ -124,13 +124,13 @@ def run_job(name, engine):
             2
         )
 
-        print(f"✓ 完成：{name}")
-        print(f"耗时：{cost} 秒")
+        print(f"[OK] {name} 完成，耗时 {cost}s")
 
     except Exception as e:
 
-        print(f"✗ 失败：{name}")
-        print(e)
+        print(f"[FAIL] {name}")
+        import traceback
+        traceback.print_exc()
 
 
 # ==========================================

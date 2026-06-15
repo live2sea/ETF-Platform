@@ -59,12 +59,14 @@ class AllocationEngine(BaseEngine):
             print(missing_df[["etf_code", "etf_name"]])
 
         # 计算市值
-        df["cost_value"] = df["quantity"] * df["avg_cost"]
-        df["market_value"] = df["quantity"] * df["current_price"]
+        df["cost_value"] = pd.to_numeric(df["quantity"] * df["avg_cost"], errors="coerce")
+        df["market_value"] = pd.to_numeric(df["quantity"] * df["current_price"], errors="coerce")
 
-        total_market_value = df["market_value"].sum()
+        total_market_value = df["market_value"].fillna(0).sum()
         if total_market_value <= 0:
-            raise ValueError(f"总市值异常:{total_market_value}")
+            print("总市值为0，可能行情数据缺失，跳过仓位计算")
+            self.result_df = df  # 保留原始数据让后续流程不中断
+            return
 
         df["allocation_pct"] = round(df["market_value"] / total_market_value * 100, 2)
         df["update_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -35,7 +35,7 @@ class DashboardEngine(BaseEngine):
         total_cost = round(self.profit_df["cost_value"].sum(), 2)
         total_market = round(self.profit_df["market_value"].sum(), 2)
         total_profit = round(self.profit_df["floating_profit"].sum(), 2)
-        profit_pct = round(total_profit / total_cost * 100, 2)
+        profit_pct = round(total_profit / total_cost * 100, 2) if total_cost > 0 else 0
 
         rows.extend([
             ["总成本", str(total_cost), now],

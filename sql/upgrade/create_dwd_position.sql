@@ -1,24 +1,26 @@
+-- ============================================================================
+-- 表名: dwd_position
+-- 用途: 当前持仓快照，通过交易记录聚合计算得出
+-- 字段说明:
+--   etf_code:        ETF代码 (主键)
+--   etf_name:        ETF名称
+--   quantity:         持仓数量
+--   avg_cost:         平均成本
+--   buy_amount:       累计买入金额
+--   sell_amount:      累计卖出金额
+--   realized_profit:  已实现盈亏
+--   update_time:      更新时间
+-- ============================================================================
 
 DROP TABLE IF EXISTS dwd_position;
 
--- 当前持仓表   
--- 该表用于存储当前持有的ETF仓位信息，包括ETF代码、名称、持仓数量、平均成本、买入金额、卖出金额、已实现盈亏和更新时间等字段。
--- 该表的数据将通过对原始交易记录进行计算和汇总得到，用于分析当前的持仓情况和盈亏情况。
-CREATE TABLE dwd_position(
-
-    etf_code TEXT PRIMARY KEY,
-
-    etf_name TEXT,
-
-    quantity INTEGER,
-
-    avg_cost REAL,
-
-    buy_amount REAL,
-
-    sell_amount REAL,
-
+CREATE TABLE dwd_position (
+    etf_code        TEXT PRIMARY KEY,
+    etf_name        TEXT,
+    quantity        INTEGER,
+    avg_cost        REAL,
+    buy_amount      REAL,
+    sell_amount     REAL,
     realized_profit REAL,
-
-    update_time TEXT
+    update_time     TEXT
 );
