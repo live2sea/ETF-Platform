@@ -48,6 +48,10 @@ from engine.rebalance_engine_v2 import RebalanceEngineV2
 
 from engine.dashboard_engine import DashboardEngine
 
+from engine.review_engine import ReviewEngine
+
+from engine.strategy_backtest_engine import StrategyBacktestEngine
+
 class DailyRunner:
 
     def run_step(self, name, func):
@@ -171,13 +175,24 @@ class DailyRunner:
         )
 
         self.run_step(
-        "仓位再平衡",
+            "仓位再平衡",
             lambda: RebalanceEngineV2().run()
         )
+
         self.run_step(
-        "投资驾驶舱",
-        lambda: DashboardEngine().run()
-    )
+            "投资驾驶舱",
+            lambda: DashboardEngine().run()
+        )
+
+        self.run_step(
+            "ETF每日复盘",
+            lambda: ReviewEngine().run()
+        )
+
+        self.run_step(
+            "策略回测",
+            lambda: StrategyBacktestEngine().run()
+        )
 
         print()
         print("=" * 100)

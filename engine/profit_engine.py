@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-#解释：该脚本定义了一个ProfitEngine类，用于计算ETF的盈亏情况。它从SQLite数据库中加载当前持仓数据，计算每只ETF的盈亏金额和排名，并将结果保存到数据库中的盈亏分析表中。最后，在主程序中创建一个ProfitEngine实例，执行计算并打印盈亏排行榜和TOP3盈亏贡献。   
+# 解释：该脚本定义了一个ProfitEngine类，用于计算ETF的盈亏情况。
+# 它从SQLite数据库中加载当前持仓数据，计算每只ETF的盈亏金额和排名，并将结果保存到数据库中的盈亏分析表中。
+# 最后，在主程序中创建一个ProfitEngine实例，执行计算并打印盈亏排行榜和TOP3盈亏贡献。   
 
 import sqlite3
 import pandas as pd

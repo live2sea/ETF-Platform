@@ -7,6 +7,7 @@ import streamlit as st
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
 DB_PATH = ROOT_DIR / "data" / "etf.db"
 
 st.set_page_config(
@@ -16,20 +17,20 @@ st.set_page_config(
 
 st.title("🤖 AI投资决策中心")
 
+
 # =====================================
 # 数据加载
 # =====================================
 
 @st.cache_data(ttl=60)
-def load_signal():
+def load_review():
 
     conn = sqlite3.connect(DB_PATH)
 
     df = pd.read_sql(
         """
         SELECT *
-        FROM dwd_etf_signal
-        ORDER BY signal_score DESC
+        FROM dwd_daily_review
         """,
         conn
     )
@@ -95,63 +96,90 @@ def load_risk():
     return df
 
 
-signal_df = load_signal()
+review_df = load_review()
 add_df = load_add_position()
 rebalance_df = load_rebalance()
 risk_df = load_risk()
 
 # =====================================
-# 账户评分
+# AI总结
 # =====================================
 
-st.subheader("账户评分")
+st.subheader("🧠 今日AI结论")
 
-if not signal_df.empty:
+summary_row = review_df[
+    review_df["review_item"] == "AI总结"
+]
 
-    account_score = round(
-        signal_df["signal_score"].mean(),
-        1
+if not summary_row.empty:
+
+    st.success(
+        summary_row.iloc[0]["review_value"]
     )
 
-    if account_score >= 70:
-        grade = "A"
-    elif account_score >= 60:
-        grade = "B"
-    elif account_score >= 50:
-        grade = "C"
-    else:
-        grade = "D"
+# =====================================
+# 今日复盘
+# =====================================
 
-    c1, c2 = st.columns(2)
+st.subheader("📋 今日复盘")
+
+c1, c2, c3, c4 = st.columns(4)
+
+try:
+
+    total_asset = review_df[
+        review_df["review_item"] == "总资产"
+    ].iloc[0]["review_value"]
+
+    total_profit = review_df[
+        review_df["review_item"] == "总盈亏"
+    ].iloc[0]["review_value"]
+
+    profit_pct = review_df[
+        review_df["review_item"] == "收益率"
+    ].iloc[0]["review_value"]
+
+    best_etf = review_df[
+        review_df["review_item"] == "最佳ETF"
+    ].iloc[0]["review_value"]
 
     c1.metric(
-        "账户综合评分",
-        account_score
+        "总资产",
+        total_asset
     )
 
     c2.metric(
-        "账户等级",
-        grade
+        "总盈亏",
+        total_profit
     )
 
+    c3.metric(
+        "收益率",
+        profit_pct
+    )
+
+    c4.metric(
+        "最佳ETF",
+        best_etf
+    )
+
+except:
+    st.warning("暂无复盘数据")
+
 # =====================================
-# 今日操作建议
+# 推荐加仓
 # =====================================
 
-st.subheader("今日操作建议")
+st.subheader("💰 推荐加仓")
 
-buy_df = add_df[
+add_show = add_df[
     add_df["recommend_amount"] > 0
-]
+].copy()
 
-if not buy_df.empty:
-
-    st.success(
-        f"今日推荐关注 {len(buy_df)} 只ETF"
-    )
+if not add_show.empty:
 
     st.dataframe(
-        buy_df[
+        add_show[
             [
                 "etf_code",
                 "etf_name",
@@ -163,125 +191,85 @@ if not buy_df.empty:
         use_container_width=True
     )
 
-# =====================================
-# TOP5加仓ETF
-# =====================================
-
-st.subheader("TOP5加仓ETF")
-
-top5 = add_df.head(5)
-
-if not top5.empty:
-
-    st.dataframe(
-        top5[
-            [
-                "etf_code",
-                "etf_name",
-                "final_score",
-                "recommend_amount"
-            ]
-        ],
-        use_container_width=True
-    )
-
-# =====================================
-# 风险警报
-# =====================================
-
-st.subheader("风险警报")
-
-high_risk = risk_df[
-    risk_df["risk_level"] == "高"
-]
-
-if high_risk.empty:
-
-    st.success("暂无高风险项")
-
 else:
 
-    for _, row in high_risk.iterrows():
-
-        st.error(
-            f"{row['risk_name']} : "
-            f"{row['suggestion']}"
-        )
+    st.info("当前无推荐加仓ETF")
 
 # =====================================
 # 调仓建议
 # =====================================
 
-st.subheader("调仓建议")
+st.subheader("⚖️ 调仓建议")
 
-adjust_df = rebalance_df[
-    rebalance_df["action"] != "持有"
-]
-
-if not adjust_df.empty:
+if not rebalance_df.empty:
 
     st.dataframe(
-        adjust_df[
+        rebalance_df[
             [
                 "category",
                 "current_pct",
                 "target_pct",
                 "deviation_pct",
-                "suggest_amount",
-                "action"
+                "action",
+                "suggest_amount"
             ]
         ],
         use_container_width=True
     )
 
 # =====================================
-# AI总结
+# 风险预警
 # =====================================
 
-st.subheader("AI总结")
+st.subheader("🚨 风险预警")
 
-summary = []
-
-if not signal_df.empty:
-
-    best = signal_df.iloc[0]
-
-    summary.append(
-        f"当前最强ETF："
-        f"{best['etf_name']} "
-        f"(评分{best['signal_score']:.0f})"
+high_risk = risk_df[
+    risk_df["risk_level"].isin(
+        ["高", "HIGH"]
     )
-
-if not add_df.empty:
-
-    best_buy = add_df.iloc[0]
-
-    summary.append(
-        f"建议优先加仓："
-        f"{best_buy['etf_name']}"
-    )
-
-if not rebalance_df.empty:
-
-    biggest = rebalance_df.iloc[0]
-
-    summary.append(
-        f"偏离目标仓位最大："
-        f"{biggest['category']}"
-    )
+]
 
 if high_risk.empty:
 
-    summary.append(
-        "当前组合整体风险可控"
+    st.success(
+        "当前无高风险项"
     )
 
 else:
 
-    summary.append(
-        f"存在 {len(high_risk)} 项高风险指标"
+    st.dataframe(
+        high_risk,
+        use_container_width=True
     )
 
-for item in summary:
+# =====================================
+# 综合建议
+# =====================================
 
-    st.info(item)
+st.subheader("🎯 综合投资建议")
+
+if not add_show.empty:
+
+    top_etf = add_show.iloc[0]
+
+    st.info(
+        f"""
+优先关注：
+
+{top_etf['etf_code']} {top_etf['etf_name']}
+
+推荐金额：
+
+{top_etf['recommend_amount']:,.0f} 元
+
+综合评分：
+
+{top_etf['final_score']}
+"""
+    )
+
+else:
+
+    st.info(
+        "暂无明确加仓目标"
+    )

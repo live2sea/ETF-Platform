@@ -22,7 +22,7 @@ def main():
     try:
 
         sql_files = sorted(
-            Path(UPGRADE_DIR).glob("create_dwd_dashboard.sql")
+            Path(UPGRADE_DIR).glob("create_dwd_signal_trend.sql")
         )
 
         for sql_file in sql_files:

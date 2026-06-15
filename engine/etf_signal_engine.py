@@ -151,6 +151,38 @@ class ETFSignalEngine:
 
         conn.close()
 
+
+    # ==================================================
+    # 历史记录
+    # ==================================================
+    def save_history(self, df):
+
+        conn = sqlite3.connect(
+            self.db_path
+        )
+
+        history_df = df.copy()
+
+        history_df["trade_date"] = (
+            datetime.now()
+            .strftime("%Y-%m-%d")
+        )
+
+        history_df.to_sql(
+            "dwd_signal_history",
+            conn,
+            if_exists="append",
+            index=False
+        )
+
+        conn.commit()
+
+        conn.close()
+
+        print(
+            f"历史信号保存：{len(df)}条"
+        )
+        
     # ==================================================
     # 输出
     # ==================================================
@@ -186,6 +218,7 @@ class ETFSignalEngine:
         result = self.build_signal(df)
 
         self.save_result(result)
+        self.save_history(result)
 
         self.print_result(result)
 
