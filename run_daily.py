@@ -1,216 +1,305 @@
 # -*- coding: utf-8 -*-
 
-"""
-ETF平台每日任务调度
-
-执行顺序：
-
-1. 行情更新
-2. 持仓分析
-3. 仓位分析
-4. 技术因子
-5. 综合信号
-6. 风险分析
-
-作者: berton
-"""
-
 import time
-from datetime import datetime
 
+
+# ==========================================
 # ODS
-from engine import rebalance_engine_v2
+# ==========================================
+
 from ods.market_price_loader import MarketPriceLoader
 from ods.market_kline_loader import MarketKlineLoader
 
-# DWD
-from engine.cost_engine import CostEngine
-from engine.profit_engine import ProfitEngine
 
-from engine.allocation_engine_v2 import AllocationEngine
-from engine.allocation_category_engine_v2 import AllocationCategoryEngine
+# ==========================================
+# Position
+# ==========================================
 
-from engine.floating_profit_engine import FloatingProfitEngine
-
-from engine.ma_factor_engine import MAFactorEngine
-from engine.rsi_factor_engine import RSIFactorEngine
-from engine.drawdown_engine import DrawdownEngine
-
-from engine.etf_signal_engine import ETFSignalEngine
-
-from engine.risk_engine import RiskEngine
-
-from engine.add_position_engine import AddPositionEngine
-
-from engine.rebalance_engine import RebalanceEngine
-
-from engine.rebalance_engine_v2 import RebalanceEngineV2
-
-from engine.dashboard_engine import DashboardEngine
-
-from engine.review_engine import ReviewEngine
-
-from engine.strategy_backtest_engine import StrategyBacktestEngine
-
-class DailyRunner:
-
-    def run_step(self, name, func):
-
-        print()
-        print("=" * 100)
-        print(f"开始执行：{name}")
-        print("=" * 100)
-
-        start = time.time()
-
-        try:
-
-            func()
-
-            cost = round(time.time() - start, 2)
-
-            print(f"✓ 完成：{name}")
-            print(f"耗时：{cost} 秒")
-
-        except Exception as e:
-
-            print(f"✗ 失败：{name}")
-            print(f"原因：{e}")
-
-            raise
-
-    def run(self):
-
-        start_time = datetime.now()
-
-        print()
-        print("=" * 100)
-        print("ETF分析平台每日任务")
-        print("=" * 100)
+from engine.position.cost_engine import CostEngine
+from engine.position.profit_engine import ProfitEngine
+from engine.position.floating_profit_engine import FloatingProfitEngine
+from engine.position.allocation_engine import AllocationEngine
+from engine.position.allocation_category_engine_v2 import (
+    AllocationCategoryEngine
+)
 
 
-        self.run_step(
-            "持仓成本计算",
-            lambda: CostEngine().run()
+# ==========================================
+# Factor
+# ==========================================
+
+from engine.factor.ma_factor_engine import MAFactorEngine
+from engine.factor.rsi_factor_engine import RSIFactorEngine
+from engine.factor.drawdown_engine import DrawdownEngine
+
+
+# ==========================================
+# Signal
+# ==========================================
+
+from engine.signal.etf_signal_engine import ETFSignalEngine
+from engine.signal.signal_history_engine import (
+    SignalHistoryEngine
+)
+from engine.signal.signal_trend_engine import (
+    SignalTrendEngine
+)
+
+
+# ==========================================
+# Strategy
+# ==========================================
+
+from engine.strategy.etf_score_engine_v2 import (
+    ETFScoreEngineV2
+)
+
+from engine.strategy.add_position_engine import (
+    AddPositionEngine
+)
+
+from engine.strategy.rebalance_engine import (
+    RebalanceEngine
+)
+
+from engine.strategy.rebalance_engine_v2 import (
+    RebalanceEngineV2
+)
+
+from engine.strategy.etf_overlap_engine import (
+    ETFOverlapEngine
+)
+
+
+# ==========================================
+# Risk
+# ==========================================
+
+from engine.risk.position_health_engine import (
+    PositionHealthEngine
+)
+
+from engine.risk.risk_engine import (
+    RiskEngine
+)
+
+
+# ==========================================
+# Dashboard
+# ==========================================
+
+from engine.dashboard.dashboard_engine import (
+    DashboardEngine
+)
+
+
+# ==========================================
+# Review
+# ==========================================
+
+from engine.review.review_engine import (
+    ReviewEngine
+)
+
+
+# ==========================================
+# 执行器
+# ==========================================
+
+def run_job(name, engine):
+
+    print()
+    print("=" * 80)
+    print(name)
+    print("=" * 80)
+
+    start = time.time()
+
+    try:
+
+        engine.run()
+
+        cost = round(
+            time.time() - start,
+            2
         )
 
-        # ==================================================
-        # ODS
-        # ==================================================
-        
+        print(f"✓ 完成：{name}")
+        print(f"耗时：{cost} 秒")
 
-        self.run_step(
-            "ETF实时行情更新",
-            lambda: MarketPriceLoader().run()
-        )
+    except Exception as e:
 
-        self.run_step(
-            "ETF历史K线更新",
-            lambda: MarketKlineLoader().run()
-        )
+        print(f"✗ 失败：{name}")
+        print(e)
 
-        # ==================================================
-        # DWD
-        # ==================================================
 
-        self.run_step(
-            "收益分析",
-            lambda: ProfitEngine().run()
-        )
-
-        self.run_step(
-            "仓位分析",
-            lambda: AllocationEngine().run()
-        )
-
-        self.run_step(
-            "主题仓位分析",
-            lambda: AllocationCategoryEngine().run()
-        )
-        self.run_step(
-            "浮动盈亏分析",
-            lambda: FloatingProfitEngine().run()
-        )
-
-        # ==================================================
-        # FACTOR
-        # ==================================================
-
-        self.run_step(
-            "MA趋势分析",
-            lambda: MAFactorEngine().run()
-        )
-
-        self.run_step(
-            "RSI分析",
-            lambda: RSIFactorEngine().run()
-        )
-
-        self.run_step(
-            "最大回撤分析",
-            lambda: DrawdownEngine().run()
-        )
-
-        # ==================================================
-        # SIGNAL
-        # ==================================================
-
-        self.run_step(
-            "综合信号分析",
-            lambda: ETFSignalEngine().run()
-        )
-
-        # ==================================================
-        # RISK
-        # ==================================================
-
-        self.run_step(
-            "组合风险分析",
-            lambda: RiskEngine().run()
-        )
-
-        self.run_step(
-            "加仓建议分析",
-            lambda: AddPositionEngine().run()
-        )
-
-        self.run_step(
-            "仓位再平衡",
-            lambda: RebalanceEngineV2().run()
-        )
-
-        self.run_step(
-            "投资驾驶舱",
-            lambda: DashboardEngine().run()
-        )
-
-        self.run_step(
-            "ETF每日复盘",
-            lambda: ReviewEngine().run()
-        )
-
-        self.run_step(
-            "策略回测",
-            lambda: StrategyBacktestEngine().run()
-        )
-
-        print()
-        print("=" * 100)
-        print("全部任务执行完成")
-        print("=" * 100)
-
-        end_time = datetime.now()
-
-        print()
-        print(f"开始时间：{start_time}")
-        print(f"结束时间：{end_time}")
-
-        print(
-            f"总耗时："
-            f"{round((end_time-start_time).total_seconds(),2)} 秒"
-        )
-
+# ==========================================
+# Main
+# ==========================================
 
 if __name__ == "__main__":
 
-    DailyRunner().run()
+    total_start = time.time()
+
+    print()
+    print("=" * 80)
+    print("ETF DAILY BATCH START")
+    print("=" * 80)
+
+    # --------------------------------------
+    # ODS
+    # --------------------------------------
+
+    run_job(
+        "市场价格更新",
+        MarketPriceLoader()
+    )
+
+    run_job(
+        "K线更新",
+        MarketKlineLoader()
+    )
+
+    # --------------------------------------
+    # Position
+    # --------------------------------------
+
+    run_job(
+        "持仓成本计算",
+        CostEngine()
+    )
+
+    run_job(
+        "已实现收益分析",
+        ProfitEngine()
+    )
+
+    run_job(
+        "浮盈浮亏分析",
+        FloatingProfitEngine()
+    )
+
+    run_job(
+        "ETF仓位分析",
+        AllocationEngine()
+    )
+
+    run_job(
+        "分类仓位分析",
+        AllocationCategoryEngine()
+    )
+
+    # --------------------------------------
+    # Factor
+    # --------------------------------------
+
+    run_job(
+        "MA趋势分析",
+        MAFactorEngine()
+    )
+
+    run_job(
+        "RSI分析",
+        RSIFactorEngine()
+    )
+
+    run_job(
+        "回撤分析",
+        DrawdownEngine()
+    )
+
+    # --------------------------------------
+    # Signal
+    # --------------------------------------
+
+    run_job(
+        "ETF综合信号",
+        ETFSignalEngine()
+    )
+
+    run_job(
+        "信号历史快照",
+        SignalHistoryEngine()
+    )
+
+    run_job(
+        "信号趋势分析",
+        SignalTrendEngine()
+    )
+
+    # --------------------------------------
+    # Strategy
+    # --------------------------------------
+
+    run_job(
+        "ETF评分V2",
+        ETFScoreEngineV2()
+    )
+
+    run_job(
+        "加仓建议",
+        AddPositionEngine()
+    )
+
+    run_job(
+        "调仓建议",
+        RebalanceEngine()
+    )
+
+    run_job(
+        "分类调仓建议",
+        RebalanceEngineV2()
+    )
+
+    run_job(
+        "ETF重仓重叠分析",
+        ETFOverlapEngine()
+    )
+
+    # --------------------------------------
+    # Risk
+    # --------------------------------------
+
+    run_job(
+        "持仓健康度",
+        PositionHealthEngine()
+    )
+
+    run_job(
+        "风险分析",
+        RiskEngine()
+    )
+
+    # --------------------------------------
+    # Dashboard
+    # --------------------------------------
+
+    run_job(
+        "Dashboard汇总",
+        DashboardEngine()
+    )
+
+    # --------------------------------------
+    # Review
+    # --------------------------------------
+
+    run_job(
+        "每日复盘",
+        ReviewEngine()
+    )
+
+    # --------------------------------------
+    # Finish
+    # --------------------------------------
+
+    total_cost = round(
+        time.time() - total_start,
+        2
+    )
+
+    print()
+    print("=" * 80)
+    print("ETF DAILY BATCH FINISHED")
+    print("=" * 80)
+
+    print(f"总耗时：{total_cost} 秒")
