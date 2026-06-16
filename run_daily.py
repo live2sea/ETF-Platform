@@ -87,16 +87,13 @@ from engine.risk.risk_engine import (
 # Dashboard
 # ==========================================
 
+
 from engine.dashboard.dashboard_engine import (
     DashboardEngine
 )
 
 from engine.dashboard.dashboard_history_engine import (
     DashboardHistoryEngine
-)
-
-from engine.dashboard.portfolio_nav_engine import (
-    PortfolioNavEngine
 )
 
 
@@ -290,11 +287,6 @@ if __name__ == "__main__":
     run_job(
         "Dashboard历史快照",
         DashboardHistoryEngine()
-    )
-
-    run_job(
-        "账户净值历史",
-        PortfolioNavEngine()
     )
 
     # --------------------------------------
