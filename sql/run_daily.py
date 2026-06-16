@@ -95,9 +95,7 @@ from engine.dashboard.dashboard_history_engine import (
     DashboardHistoryEngine
 )
 
-from engine.dashboard.portfolio_nav_engine import (
-    PortfolioNavEngine
-)
+from engine.dashboard.portfolio_nav_engine import PortfolioNavEngine
 
 
 # ==========================================

@@ -1,309 +1,70 @@
 # -*- coding: utf-8 -*-
 
-import sqlite3
-import pandas as pd
 import streamlit as st
 import plotly.express as px
 
+import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# ==================================================
-# 配置
-# ==================================================
+from _utils import load_df, rename_columns
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+st.title("📊 因子排行榜")
 
-DB_PATH = ROOT_DIR / "data" / "etf.db"
-
-st.set_page_config(
-    page_title="ETF排行榜",
-    page_icon="🏆",
-    layout="wide"
+# 焦点：按因子维度排名，与 03_ETF评分 的综合评分区分
+ma_df = load_df(
+    "SELECT etf_code, etf_name, trend_score, trend_level, signal "
+    "FROM dwd_ma_factor ORDER BY trend_score DESC"
+)
+rsi_df = load_df(
+    "SELECT etf_code, etf_name, rsi6, score, signal "
+    "FROM dwd_rsi_factor ORDER BY rsi6 ASC"
+)
+dd_df = load_df(
+    "SELECT etf_code, etf_name, drawdown_pct, score, signal "
+    "FROM dwd_drawdown_factor ORDER BY drawdown_pct ASC"
 )
 
-st.title("🏆 ETF排行榜")
-
-# ==================================================
-# 数据加载
-# ==================================================
-
-@st.cache_data(ttl=60)
-def load_signal():
-
-    conn = sqlite3.connect(DB_PATH)
-
-    df = pd.read_sql(
-        """
-        SELECT
-            etf_code,
-            etf_name,
-            signal_score,
-            level,
-            suggestion
-        FROM dwd_etf_signal
-        ORDER BY signal_score DESC
-        """,
-        conn
-    )
-
-    conn.close()
-
-    return df
-
-
-@st.cache_data(ttl=60)
-def load_ma():
-
-    conn = sqlite3.connect(DB_PATH)
-
-    df = pd.read_sql(
-        """
-        SELECT
-            etf_code,
-            etf_name,
-            trend_score,
-            trend_level,
-            signal
-        FROM dwd_ma_factor
-        """,
-        conn
-    )
-
-    conn.close()
-
-    return df
-
-
-@st.cache_data(ttl=60)
-def load_rsi():
-
-    conn = sqlite3.connect(DB_PATH)
-
-    df = pd.read_sql(
-        """
-        SELECT
-            etf_code,
-            etf_name,
-            rsi6,
-            score,
-            signal
-        FROM dwd_rsi_factor
-        ORDER BY rsi6 ASC
-        """,
-        conn
-    )
-
-    conn.close()
-
-    return df
-
-
-@st.cache_data(ttl=60)
-def load_drawdown():
-
-    conn = sqlite3.connect(DB_PATH)
-
-    df = pd.read_sql(
-        """
-        SELECT
-            etf_code,
-            etf_name,
-            drawdown_pct,
-            score,
-            signal
-        FROM dwd_drawdown_factor
-        ORDER BY drawdown_pct ASC
-        """,
-        conn
-    )
-
-    conn.close()
-
-    return df
-
-
-signal_df = load_signal()
-ma_df = load_ma()
-rsi_df = load_rsi()
-drawdown_df = load_drawdown()
-
-# ==================================================
-# 综合评分榜
-# ==================================================
-
-st.subheader("🏆 综合评分榜")
-
-st.dataframe(
-    signal_df,
-    use_container_width=True,
-    hide_index=True
-)
-
-# ==================================================
-# TOP3
-# ==================================================
-
-if not signal_df.empty:
-
-    st.subheader("🥇 TOP3 ETF")
-
-    top3 = signal_df.head(3)
-
-    cols = st.columns(3)
-
-    for i, (_, row) in enumerate(top3.iterrows()):
-
-        cols[i].metric(
-            row["etf_name"],
-            f"{row['signal_score']:.0f}分",
-            row["level"]
-        )
-
-# ==================================================
-# MA趋势榜
-# ==================================================
-
-st.subheader("📈 MA趋势榜")
-
-ma_show = ma_df.sort_values(
-    "trend_score",
-    ascending=False
-)
-
-st.dataframe(
-    ma_show[
-        [
-            "etf_name",
-            "trend_score",
-            "trend_level",
-            "signal"
-        ]
-    ],
-    use_container_width=True,
-    hide_index=True
-)
-
-# ==================================================
-# RSI超卖榜
-# ==================================================
-
-st.subheader("📉 RSI超卖榜")
-
-rsi_show = rsi_df.sort_values(
-    "rsi6",
-    ascending=True
-)
-
-st.dataframe(
-    rsi_show[
-        [
-            "etf_name",
-            "rsi6",
-            "score",
-            "signal"
-        ]
-    ],
-    use_container_width=True,
-    hide_index=True
-)
-
-# ==================================================
-# 回撤价值榜
-# ==================================================
-
-st.subheader("💎 回撤价值榜")
-
-dd_show = drawdown_df.sort_values(
-    "drawdown_pct"
-)
-
-st.dataframe(
-    dd_show[
-        [
-            "etf_name",
-            "drawdown_pct",
-            "score",
-            "signal"
-        ]
-    ],
-    use_container_width=True,
-    hide_index=True
-)
-
-# ==================================================
-# 综合评分图
-# ==================================================
-
-st.subheader("📊 综合评分可视化")
-
-fig = px.bar(
-    signal_df.head(15),
-    x="etf_name",
-    y="signal_score",
-    color="level",
-    title="ETF综合评分TOP15"
-)
-
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
-
-# ==================================================
-# AI选基建议
-# ==================================================
-
-st.subheader("🤖 AI选基建议")
-
-if not signal_df.empty:
-
-    best = signal_df.iloc[0]
-
-    worst = signal_df.iloc[-1]
-
-    summary = f"""
-当前评分最高ETF：
-
-{best['etf_name']}
-
-综合评分：{best['signal_score']:.0f}
-
-评级：{best['level']}
-
-建议：{best['suggestion']}
-
---------------------------------------
-
-当前评分最低ETF：
-
-{worst['etf_name']}
-
-综合评分：{worst['signal_score']:.0f}
-
-评级：{worst['level']}
-
-建议：{worst['suggestion']}
-
---------------------------------------
-
-优先关注：
-
-1. 综合评分高于70
-
-2. RSI低于20
-
-3. 回撤超过25%
-
-同时满足上述条件的ETF
-通常具备较好的中长期配置价值。
-"""
-
-    st.success(summary)
-
-# ==================================================
-# 页脚
-# ==================================================
-
-st.caption(
-    "数据来源：dwd_etf_signal / dwd_ma_factor / dwd_rsi_factor / dwd_drawdown_factor"
-)
+# ── MA 趋势 ──
+st.subheader("📈 MA 趋势榜")
+if not ma_df.empty:
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        st.dataframe(rename_columns(ma_df[["etf_name", "trend_score", "trend_level", "signal"]]),
+                     use_container_width=True, hide_index=True)
+    with col_b:
+        fig = px.bar(ma_df.head(15), x="etf_name", y="trend_score",
+                     color="trend_level", title="MA 趋势评分 TOP15",
+                     color_discrete_map={"强": "#16a34a", "中": "#eab308", "弱": "#dc2626"})
+        st.plotly_chart(fig, use_container_width=True)
+
+st.divider()
+
+# ── RSI 超卖 ──
+st.subheader("📉 RSI 超卖榜（低 RSI = 超卖信号）")
+if not rsi_df.empty:
+    col_c, col_d = st.columns([1, 1])
+    with col_c:
+        st.dataframe(rename_columns(rsi_df[["etf_name", "rsi6", "score", "signal"]]),
+                     use_container_width=True, hide_index=True)
+    with col_d:
+        fig = px.bar(rsi_df.head(15), x="etf_name", y="rsi6",
+                     color="signal", title="RSI 超卖 TOP15",
+                     color_discrete_map={"超卖": "#16a34a", "中性": "#eab308", "超买": "#dc2626"})
+        st.plotly_chart(fig, use_container_width=True)
+
+st.divider()
+
+# ── 回撤 ──
+st.subheader("💎 回撤价值榜（深回撤 = 潜在买点）")
+if not dd_df.empty:
+    col_e, col_f = st.columns([1, 1])
+    with col_e:
+        st.dataframe(rename_columns(dd_df[["etf_name", "drawdown_pct", "score", "signal"]]),
+                     use_container_width=True, hide_index=True)
+    with col_f:
+        fig = px.bar(dd_df.head(15), x="etf_name", y="drawdown_pct",
+                     color="signal", title="回撤深度 TOP15")
+        st.plotly_chart(fig, use_container_width=True)
+
+st.caption("数据来源：dwd_ma_factor / dwd_rsi_factor / dwd_drawdown_factor")
