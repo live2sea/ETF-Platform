@@ -1,0 +1,46 @@
+# Bytecode - Python 运行时自动生成，每次 import 都产生
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment - 本地依赖，通过 requirements.txt/pyproject.toml 重建
+.venv/
+venv/
+env/
+env.bak/
+
+# Environment & secrets - 密钥和密码绝不入仓
+.env
+.env.local
+*.pem
+*.key
+
+# Build & packaging - setuptools / build / pip 产物
+build/
+dist/
+*.egg
+*.egg-info/
+.eggs/
+
+# Testing - pytest 和 coverage 的缓存与报告
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+*~
+
+# Logs
+*.log
+logs/
+# Bytecode
