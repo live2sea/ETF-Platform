@@ -12,13 +12,13 @@
  - 从 AKShare 拉取 8 个核心宏观指标
  - 单指标评分（0-100）→ 综合宏观环境评分 + 趋势加速度
  - 宏观评分驱动：总仓位上限（Risk 层）+ 单 ETF 风向加分（Strategy 层）
+ - Dashboard 展示：宏观环境卡 + ETF 风向分列 + 仓位上限仪表盘
  - 权重和阈值集中配置，支持后续回测调优
- - 不改变现有模块的职责边界，仅在 ETF 评分和风险引擎中追加字段
+ - 不改变现有模块的职责边界，仅在目标引擎中追加字段
 
  ## Non-Goals
 
  - 不做实时宏观数据推送/通知
- - 不做 Dashboard 新增宏观页面（后续独立 spec）
  - 不做机器学习预测模型
  - 不引入 Tushare/FRED/Wind 等额外数据源（V1 只用 AKShare）
 
@@ -47,6 +47,9 @@
  engine/macro/macro_environment_engine.py  ──→  dwd_macro_environment  (综合分+加速度+阶段)
      ↓                         ↘
  engine/strategy/etf_score_engine_v2.py    engine/risk/risk_engine.py
+     ↓                         ↓
+ dashboard/03_ETF评分.py            dashboard/04_风险分析.py
+ dashboard/01_总览.py
  ```
 
  ### 流水线位置（run_daily.py）
@@ -77,6 +80,9 @@
  | `engine/strategy/etf_score_engine_v2.py` | 修改 | 新增宏观风向分(第4项，0-20分)，总分上限 50→70 |
  | `engine/risk/risk_engine.py` | 修改 | 新增 position_cap / cap_gap / cap_warning |
  | `run_daily.py` | 修改 | 插入 3 段 macro 任务 |
+ | `dashboard/01_总览.py` | 修改 | 顶部新增宏观环境摘要卡（阶段、总分、加速度） |
+ | `dashboard/03_ETF评分.py` | 修改 | 评分表新增「宏观风向分」列 |
+ | `dashboard/04_风险分析.py` | 修改 | 新增仓位上限指标 + 超限警告 |
 
  ## Data Tables
 
@@ -192,6 +198,8 @@
  | C 观察 | ≥35 |
  | D 减仓观察 | <35 |
 
+ 输出新增字段 `macro_bonus`，供 Dashboard 展示。
+
  ## Risk Engine Integration
 
  `risk_engine.py` 新增字段：
@@ -199,6 +207,24 @@
  - `macro_position_cap` — 当前阶段仓位上限
  - `cap_gap` — 实际仓位 − 上限
  - `cap_warning` — gap > 0 时生成减仓建议
+
+ ## Dashboard Integration
+
+ ### 01_总览.py
+
+ 顶部新增宏观环境摘要卡，读取 `dwd_macro_environment` 最新一行：
+ - 宏观阶段（🟢扩张 / 🔵复苏 / 🟡观望 / 🔴防御）
+ - 加权总分
+ - 加速度方向（↑/↓/→）
+ - 仓位上限 %
+
+ ### 03_ETF评分.py
+
+ 评分表新增一列 `宏观风向分`，来源为 `dwd_etf_score_v2` 的 `macro_bonus` 字段，展示各 ETF 因当前宏观阶段获得的额外加分。
+
+ ### 04_风险分析.py
+
+ 新增仓位上限仪表盘：展示 `macro_position_cap` vs 实际仓位，gap > 0 时红色警告提示减仓。
 
  ## Weighting Philosophy
 
