@@ -1,10 +1,17 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
+"""ETF Daily Batch Pipeline.
+Processes pending trade Excel files (incremental import + dedup) at pipeline start.
+"""
+
 
 import time
 
 
 
 # ==========================================
+# Trade Auto-Import
+from tools.trade_watcher import run as run_trade_watcher
+
 # ODS
 # ==========================================
 
@@ -151,6 +158,18 @@ if __name__ == "__main__":
     print("=" * 80)
 
     # --------------------------------------
+    # --------------------------------------
+    # 批量导入积压的交易 Excel
+    # --------------------------------------
+
+    print()
+    print("=" * 80)
+    print("trade_watcher: 扫描导入交易Excel")
+    print("=" * 80)
+
+    run_trade_watcher()
+
+    # --------------------------------------
     # 先把数据加载到position表，ods层逻辑依赖这个表，后续再优化成并行
     # --------------------------------------
 
@@ -160,7 +179,10 @@ if __name__ == "__main__":
     )
 
     # --------------------------------------
-    # ODS
+    # Trade Auto-Import
+
+
+# ODS
     # --------------------------------------
 
     run_job(

@@ -1,7 +1,11 @@
-#!/usr/bin/env python3
-#解释：该脚本定义了一个TradeImporter类，用于从Excel文件中导入ETF交易记录。它包含方法来加载Excel数据、过滤出ETF相关的记录、转换列名以适应数据库结构，并将数据保存到SQLite数据库中。最后，在主程序中创建一个TradeImporter实例并运行导入过程。
+﻿#!/usr/bin/env python3
+# 解释：该脚本定义了一个TradeImporter类，用于从Excel文件中导入ETF交易记录。
+# 它包含方法来加载Excel数据、过滤出ETF相关的记录、转换列名以适应数据库结构，并将数据保存到SQLite数据库中。
+# 最后，在主程序中创建一个TradeImporter实例并运行导入过程。
 import pandas as pd
 import sqlite3
+import os
+import shutil
 
 
 class TradeImporter:
@@ -75,25 +79,44 @@ class TradeImporter:
         ]
 
     def save_sqlite(self, df):
+        dedup_cols = ["trade_date", "trade_time", "etf_code",
+                      "trade_type", "price", "quantity"]
 
         conn = sqlite3.connect(self.db_path)
 
-        conn.execute(
-            "DELETE FROM ods_trade_record"
-        )
+        try:
+            existing = pd.read_sql(
+                f"SELECT {', '.join(dedup_cols)} FROM ods_trade_record",
+                conn
+            )
+            existing_keys = set(
+                tuple(row[col] for col in dedup_cols)
+                for _, row in existing.iterrows()
+            )
+        except Exception:
+            existing_keys = set()
 
-        df.to_sql(
-            "ods_trade_record",
-            conn,
-            if_exists="append",
-            index=False
-        )
+        new_rows = []
+        for _, row in df.iterrows():
+            key = tuple(row[col] for col in dedup_cols)
+            if key not in existing_keys:
+                new_rows.append(row)
 
+        new_df = pd.DataFrame(new_rows, columns=df.columns)
+
+        if len(new_df) > 0:
+            new_df.to_sql(
+                "ods_trade_record",
+                conn,
+                if_exists="append",
+                index=False
+            )
+
+        skipped = len(df) - len(new_df)
         conn.commit()
-
         conn.close()
 
-        print(f"成功导入 {len(df)} 条ETF交易记录")
+        print(f"导入 {len(new_df)} 条新记录，跳过 {skipped} 条重复")
 
     def run(self, file_path):
 
