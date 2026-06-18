@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """ETF Daily Batch Pipeline.
 Processes pending trade Excel files (incremental import + dedup) at pipeline start.
 """
@@ -17,6 +17,7 @@ from tools.trade_watcher import run as run_trade_watcher
 
 from ods.market_price_loader import MarketPriceLoader
 from ods.market_kline_loader import MarketKlineLoader
+from ods.macro_loader      import MacroLoader
 
 
 # ==========================================
@@ -49,6 +50,19 @@ from engine.signal.etf_signal_engine import ETFSignalEngine
 
 from engine.signal.signal_trend_engine import (
     SignalTrendEngine
+)
+
+
+# ==========================================
+# Macro
+# ==========================================
+
+from engine.macro.macro_indicator_engine import (
+    MacroIndicatorEngine
+)
+
+from engine.macro.macro_environment_engine import (
+    MacroEnvironmentEngine
 )
 
 

@@ -11,6 +11,24 @@ from _utils import load_df, rename_columns
 
 st.title("📊 账户总览")
 
+
+# === macro environment summary card ===
+macro_df = load_df("SELECT * FROM dwd_macro_environment ORDER BY eval_date DESC LIMIT 1")
+if not macro_df.empty:
+    mr = macro_df.iloc[0]
+    phase_emoji = {"扩张": "🟢", "复苏": "🔵", "观望": "🟡", "防御": "🔴"}
+    accel_arrow = {"正向": "↑", "负向": "↓", "中性": "→"}
+    emoji = phase_emoji.get(mr["macro_phase"], "❓")
+    arrow = accel_arrow.get(mr["acceleration"], "→")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric(f"{emoji} 宏观阶段", mr["macro_phase"])
+    m2.metric("📊 加权总分", f"{mr['macro_score']:.0f}")
+    m3.metric(f"趋势加速 {arrow}", mr["acceleration"])
+    m4.metric("🔺 仓位上限", f"{int(mr['position_cap'])}%")
+    if mr["effective_phase"] != mr["macro_phase"]:
+        st.caption(f"⚡ 趋势修正: 静态阶段={mr['macro_phase']} → 执行阶段={mr['effective_phase']}")
+    st.divider()
+
 # ── KPI 行 ──
 dashboard_df = load_df("SELECT * FROM dwd_dashboard")
 db = dict(zip(dashboard_df["item_name"], dashboard_df["item_value"]))

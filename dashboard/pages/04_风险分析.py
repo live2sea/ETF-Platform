@@ -80,4 +80,27 @@ if not risk_df.empty:
         lines.append("风险偏高，建议逐步优化仓位结构。")
     st.info("\n\n".join(lines))
 
+
+st.divider()
+
+# === macro position cap gauge ===
+macro_df = load_df("SELECT * FROM dwd_macro_environment ORDER BY eval_date DESC LIMIT 1")
+if not macro_df.empty:
+    mr = macro_df.iloc[0]
+    cap = int(mr["position_cap"])
+    active_phase = mr.get("effective_phase", mr["macro_phase"])
+    st.subheader(f"🛡 仓位上限仪表盘 (phase={active_phase}, cap={cap}%)")
+    # Get actual total allocation
+    alloc_df = load_df("SELECT SUM(allocation_pct) as total FROM dwd_allocation")
+    actual = float(alloc_df.iloc[0]["total"]) if not alloc_df.empty else 0
+    gap = round(actual - cap, 1)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("仓位上限", f"{cap}%")
+    c2.metric("实际仓位", f"{actual:.1f}%")
+    c3.metric("超限幅度", f"{gap:.1f}%", delta=f"{gap:.1f}%" if gap != 0 else None, delta_color="inverse")
+    if gap > 0:
+        st.error(f"🚨 仓位超限警告: 实际仓位({actual:.1f}%)超过上限({cap}%){gap:.1f}%，建议减仓!")
+    else:
+        st.success(f"✅ 仓位正常: 实际仓位({actual:.1f}%)低于上限({cap}%)")
+
 st.caption("数据来源：dwd_risk_analysis / dwd_position_health")

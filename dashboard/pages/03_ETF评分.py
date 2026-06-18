@@ -92,4 +92,15 @@ with col_f:
         f"评分由 MA 趋势 + RSI 位置 + 回撤空间综合计算。"
     )
 
+
+st.divider()
+
+# === ETF macro bonus ===
+st.subheader("🌍 宏观风向分 (ETF评分V2)")
+score_df = load_df(
+    "SELECT etf_code, etf_name, macro_bonus, total_score, score_level FROM dwd_etf_score_v2 ORDER BY total_score DESC"
+)
+if not score_df.empty:
+    st.dataframe(rename_columns(score_df), use_container_width=True, hide_index=True)
+
 st.caption("数据来源：dwd_etf_signal")

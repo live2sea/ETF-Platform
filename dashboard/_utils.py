@@ -57,6 +57,15 @@ COLUMN_LABELS = {
     "item_value": "数值",
     "item_name": "指标名称",
     "etf_count": "ETF数量",
+    "macro_bonus": "宏观风向分",
+    "macro_score": "宏观总分",
+    "macro_phase": "宏观阶段",
+    "effective_phase": "执行阶段",
+    "acceleration": "趋势加速",
+    "position_cap": "仓位上限",
+    "cap_gap": "超限幅度",
+    "positive_cap": "建议仓位",
+    "actual_pct": "实际仓位",
 }
 
 

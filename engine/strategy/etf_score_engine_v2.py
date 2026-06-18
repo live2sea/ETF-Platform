@@ -2,6 +2,7 @@
 
 import os
 import sys
+import json
 import sqlite3
 import pandas as pd
 from datetime import datetime
@@ -12,26 +13,31 @@ from engine.base_engine import BaseEngine
 
 
 class ETFScoreEngineV2(BaseEngine):
-    """ETF评分系统 V2"""
+    """ETF评分系统 V2 — 新增宏观风向分(0-20), 总分上限 70"""
 
     def __init__(self):
         super().__init__()
         self._category_map = {
-            "159740": "港股科技", "513580": "港股科技", "513980": "港股科技",
-            "159632": "美股科技", "159696": "美股科技", "513300": "美股科技",
-            "513110": "美股科技", "159659": "美股科技",
-            "513400": "美股宽基",
+            "159740": "港科技", "513580": "港科技", "513980": "港科技",
+            "159632": "美科技", "159696": "美科技", "513300": "美科技",
+            "513110": "美科技", "159659": "美科技",
+            "513400": "美宽基",
             "510880": "红利", "563020": "红利",
             "164824": "印度",
-            "513000": "日本", "513800": "日本",
+            "513000": "日经", "513800": "日经",
             "159865": "农业",
             "512170": "医疗",
             "159529": "消费",
-            "159561": "欧洲",
+            "159561": "欧",
         }
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "config", "macro_weights.json"
+        )
+        with open(config_path, "r", encoding="utf-8") as f:
+            self.macro_config = json.load(f)
 
     def extract(self):
-        """Extract: 加载仓位、浮动盈亏、已实现收益"""
         conn = sqlite3.connect(self.db_path)
         self.allocation_df = pd.read_sql(
             "SELECT etf_code, etf_name, allocation_pct FROM dwd_allocation", conn
@@ -42,23 +48,35 @@ class ETFScoreEngineV2(BaseEngine):
         self.profit_df = pd.read_sql(
             "SELECT etf_code, realized_profit FROM dwd_profit_analysis", conn
         )
+        try:
+            self.macro_env = pd.read_sql(
+                "SELECT effective_phase FROM dwd_macro_environment ORDER BY eval_date DESC LIMIT 1", conn
+            )
+        except Exception:
+            self.macro_env = pd.DataFrame()
         conn.close()
 
+    def _get_macro_bonus(self, etf_code):
+        if self.macro_env.empty:
+            return 10
+        phase = self.macro_env.iloc[0]["effective_phase"]
+        cat = self._category_map.get(etf_code, "其它")
+        bonus_map = self.macro_config.get("etf_category_bonus", {}).get(phase, {})
+        return bonus_map.get(cat, bonus_map.get("其它", 10))
+
     def transform(self):
-        """Transform: 综合评分计算"""
         df = (
             self.allocation_df.merge(self.floating_df, on="etf_code", how="left")
             .merge(self.profit_df, on="etf_code", how="left")
         )
         df.fillna(0, inplace=True)
-
         result = []
         for _, row in df.iterrows():
-            total_score = sum([
-                self._calc_allocation_score(row["allocation_pct"]),
-                self._calc_floating_score(row["floating_profit_pct"]),
-                self._calc_realized_score(row["realized_profit"]),
-            ])
+            alloc_score   = self._calc_allocation_score(row["allocation_pct"])
+            float_score   = self._calc_floating_score(row["floating_profit_pct"])
+            realized_score = self._calc_realized_score(row["realized_profit"])
+            macro_bonus   = self._get_macro_bonus(row["etf_code"])
+            total_score = sum([alloc_score, float_score, realized_score, macro_bonus])
             result.append({
                 "etf_code": row["etf_code"],
                 "etf_name": row["etf_name"],
@@ -67,12 +85,12 @@ class ETFScoreEngineV2(BaseEngine):
                 "floating_profit": round(row["floating_profit"], 2),
                 "floating_profit_pct": round(row["floating_profit_pct"], 2),
                 "realized_profit": round(row["realized_profit"], 2),
+                "macro_bonus": macro_bonus,
                 "total_score": total_score,
                 "score_level": self._get_level(total_score),
                 "suggestion": self._get_suggestion(total_score),
                 "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             })
-
         self.result_df = pd.DataFrame(result).sort_values("total_score", ascending=False)
 
     def _calc_allocation_score(self, pct):
@@ -97,19 +115,18 @@ class ETFScoreEngineV2(BaseEngine):
         return 3
 
     def _get_level(self, score):
-        if score >= 80: return "A"
-        if score >= 65: return "B"
-        if score >= 50: return "C"
+        if score >= 55: return "A"
+        if score >= 45: return "B"
+        if score >= 35: return "C"
         return "D"
 
     def _get_suggestion(self, score):
-        if score >= 80: return "优先加仓"
-        if score >= 65: return "继续持有"
-        if score >= 50: return "观察"
+        if score >= 55: return "优先加仓"
+        if score >= 45: return "继续持有"
+        if score >= 35: return "观察"
         return "减仓观察"
 
     def load(self):
-        """Load: 写入 dwd_etf_score_v2"""
         conn = sqlite3.connect(self.db_path)
         conn.execute("DELETE FROM dwd_etf_score_v2")
         self.result_df.to_sql("dwd_etf_score_v2", conn, if_exists="append", index=False)
@@ -119,13 +136,14 @@ class ETFScoreEngineV2(BaseEngine):
     def print_result(self):
         print()
         print("=" * 100)
-        print("ETF评分V2排行榜")
+        print("ETF评分V2排行榜 (含宏观风向分)")
         print("=" * 100)
         for _, row in self.result_df.iterrows():
             print(
                 f"{row['etf_code']} "
                 f"{row['etf_name']:<10}"
                 f" 总分:{row['total_score']:>3}"
+                f" 宏观加分:{int(row['macro_bonus']):>2}"
                 f" 等级:{row['score_level']}"
                 f" 建议:{row['suggestion']}"
             )
