@@ -60,8 +60,6 @@ class RiskEngine(BaseEngine):
         if not self.macro_env.empty:
             cap = int(self.macro_env.iloc[0]["position_cap"])
             phase = self.macro_env.iloc[0]["effective_phase"]
-            actual = round(float(category_df["allocation_pct"].sum()), 1) if "category_df" in dir() and self.category_df is not None and not self.category_df.empty else 0
-            # recalc actual total from allocation_df
             actual_total = round(float(self.allocation_df["allocation_pct"].sum()), 1)
             cap_gap = round(actual_total - cap, 1)
             warning = ""
@@ -69,7 +67,7 @@ class RiskEngine(BaseEngine):
                 warning = f"超限{cap_gap:.1f}% | 建议减仓至≤{cap}%"
                 score -= 15
             risk_rows.append(["宏观仓位", f"effective_phase={phase}",
-                              cap, "高" if gap > 0 else "低",
+                              cap, "高" if cap_gap > 0 else "低",
                               f"仓位上限={cap}%, 实际={actual_total:.1f}%{', ' + warning if warning else ''}"])
 
         self.macro_position_cap = int(self.macro_env.iloc[0]["position_cap"]) if not self.macro_env.empty else 0
