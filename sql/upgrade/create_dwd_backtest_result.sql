@@ -13,6 +13,7 @@
 --   max_drawdown:  最大回撤 (%)
 --   sharpe_ratio:  夏普比率
 --   update_time:   更新时间
+--   主键:          (strategy_name, etf_code)
 -- ============================================================================
 
 DROP TABLE IF EXISTS dwd_backtest_result;
@@ -28,5 +29,6 @@ CREATE TABLE dwd_backtest_result (
     annual_return REAL,
     max_drawdown  REAL,
     sharpe_ratio  REAL,
-    update_time   TEXT
+    update_time   TEXT,
+    PRIMARY KEY (strategy_name, etf_code)
 );

@@ -8,6 +8,7 @@
 --   risk_level:  风险等级 (高/中/低)
 --   suggestion:  改进建议
 --   update_time: 更新时间
+--   主键:        (risk_type, risk_name)
 -- ============================================================================
 
 DROP TABLE IF EXISTS dwd_risk_analysis;
@@ -18,5 +19,6 @@ CREATE TABLE dwd_risk_analysis (
     risk_value  REAL,
     risk_level  TEXT,
     suggestion  TEXT,
-    update_time TEXT
+    update_time TEXT,
+    PRIMARY KEY (risk_type, risk_name)
 );

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- 表名: dwd_etf_score_v2
--- 用途: ETF综合评分V2，基于仓位/浮动盈亏/已实现收益计算综合评分
+-- 用途: ETF综合评分V2，基于仓位/浮动盈亏/已实现收益/宏观风向计算综合评分
 -- 字段说明:
 --   etf_code:            ETF代码 (主键)
 --   etf_name:            ETF名称
@@ -9,6 +9,7 @@
 --   floating_profit:      浮动盈亏
 --   floating_profit_pct:  浮动盈亏百分比
 --   realized_profit:      已实现盈亏
+--   macro_bonus:          宏观风向加分
 --   total_score:          综合总分
 --   score_level:          评分等级 (A/B/C/D)
 --   suggestion:           操作建议
@@ -25,6 +26,7 @@ CREATE TABLE dwd_etf_score_v2 (
     floating_profit     REAL,
     floating_profit_pct REAL,
     realized_profit     REAL,
+    macro_bonus         INTEGER,
     total_score         INTEGER,
     score_level         TEXT,
     suggestion          TEXT,
