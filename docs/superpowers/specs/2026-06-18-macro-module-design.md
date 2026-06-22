@@ -123,9 +123,22 @@
  | position_cap | INTEGER | 仓位上限 % |
  | update_time | TEXT | 更新时间 |
 
- 每日一行。
+每日一行。
 
- ## Config: macro_weights.json
+### ODS 层保存策略
+
+| 指标 | 频率 | AKShare 返回量 | 策略 |
+|---|---|---|---|
+| PMI / M2 / CPI / PPI / 美联储利率 | 月 | ~200-400 行全量 | 首次全量拉取并保留 |
+| 中美利差 / 沪深300 PE/PB / 北向资金 | 日 | ~5000-10000 行全量 | 首次全量拉取；后续每日只拉最新一行 |
+
+加载器行为：
+- 首次运行 → 拉取 AKShare 返回的全部历史数据写入 ODS
+- 后续每日运行 → 按 (indicator_date, indicator_name) 检查是否已存在，存在则跳过
+- 已存在的旧数据不删除、不补齐
+- 报错时 → 保留已有 ODS 数据不变，打印 WARN 日志 + traceback
+
+## Config: macro_weights.json
 
  六个配置段：
 
@@ -161,16 +174,24 @@
  macro_score = Σ(单指标分数 × 权重)
  ```
 
- ### 趋势加速度
+### 趋势加速度
 
- ```
- trend_score = Σ(sign(当前值 - N月前值) × 权重)
- trend_score > +0.15 → 正向加速
- trend_score < -0.15 → 负向加速
- 其余 → 中性
- ```
+计算口径（对每个指标 i）：
 
- ### 阶段修正矩阵
+1. 确定当前值：从 `dwd_macro_indicator` 取 `indicator_date ≤ eval_date` 的最新一条的 `score`
+2. 确定对比值：从 `dwd_macro_indicator` 取 `indicator_date` 在 `(eval_date - lookback_months 个月) ±15 天` 范围内的最新一条的 `score`
+3. 计算 delta = 当前值 - 对比值
+4. 方向符号：正向指标用 `sign(delta)`，反向指标用 `-sign(delta)`（配置中 `type: "反向"` 的指标：美联储利率、沪深300 PE）
+5. 加权贡献 = 方向符号 × 该指标权重
+6. 若无可用对比值 → 跳过该指标，其余指标权重重归一化
+7. trend_score = Σ(各指标加权贡献)
+
+趋势判定：
+- trend_score > +0.15 → 正向加速
+- trend_score < -0.15 → 负向加速
+- 其余 → 中性
+
+### 阶段修正矩阵
 
  | 静态阶段 → 趋势 | 正向 | 中性 | 负向 |
  |---|---|---|---|
