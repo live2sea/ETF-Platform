@@ -105,12 +105,11 @@ class TradeImporter:
         new_df = pd.DataFrame(new_rows, columns=df.columns)
 
         if len(new_df) > 0:
-            new_df.to_sql(
-                "ods_trade_record",
-                conn,
-                if_exists="append",
-                index=False
-            )
+            # Use INSERT OR IGNORE as safety net against the unique index
+            cols = ", ".join(new_df.columns)
+            placeholders = ", ".join(["?"] * len(new_df.columns))
+            sql = f"INSERT OR IGNORE INTO ods_trade_record ({cols}) VALUES ({placeholders})"
+            conn.executemany(sql, new_df.values.tolist())
 
         skipped = len(df) - len(new_df)
         conn.commit()
