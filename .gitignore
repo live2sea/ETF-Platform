@@ -45,3 +45,6 @@ Desktop.ini
 *.log
 logs/
 # Bytecode
+
+# Database files - SQLite 数据库文件
+*.db
