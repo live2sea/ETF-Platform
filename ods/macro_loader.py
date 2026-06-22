@@ -1,6 +1,15 @@
+# -*- coding: utf-8 -*-
+"""
+Macro Loader -- AKShare 8       /
+   -  ->  AKShare     ODS
+   -  -> (indicator_date, indicator_name)    
+   -  ->      ODS  WARN + traceback
+"""
+
 import sqlite3
 import json
 import os
+import traceback
 import pandas as pd
 import akshare as ak
 from datetime import datetime
@@ -10,14 +19,14 @@ CONFIG_PATH = os.path.join(ROOT, "config", "macro_weights.json")
 DB_PATH = os.path.join(ROOT, "data", "etf.db")
 
 INDICATOR_LOADERS = {
-    "macro_china_pmi":                  "load_pmi",
-    "macro_china_money_supply":         "load_m2",
-    "macro_china_china_us_yield_spread":"load_yield_spread",
-    "macro_china_cpi_yearly":           "load_cpi",
-    "macro_china_ppi_yearly":           "load_ppi",
-    "macro_usa_interest_rate":          "load_fed_rate",
-    "stock_a_pe_csi300":                "load_csi300_pe",
-    "stock_hsgt_north_net_flow_in_em":  "load_north_flow",
+    "macro_china_pmi":                   "load_pmi",
+    "macro_china_money_supply":          "load_m2",
+    "macro_china_china_us_yield_spread": "load_yield_spread",
+    "macro_china_cpi_yearly":            "load_cpi",
+    "macro_china_ppi_yearly":            "load_ppi",
+    "macro_usa_interest_rate":           "load_fed_rate",
+    "stock_a_pe_csi300":                 "load_csi300_pe",
+    "stock_hsgt_north_net_flow_in_em":   "load_north_flow",
 }
 
 
@@ -27,140 +36,255 @@ class MacroLoader:
         self.db_path = DB_PATH
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             self.config = json.load(f)
+        self._ensure_table()
+        self._existing = self._load_existing_keys()
 
+    # ================================================================ #
+    # Table
+    # ================================================================ #
+    def _ensure_table(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS ods_macro_indicator (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                indicator_date  TEXT,
+                indicator_name  TEXT,
+                indicator_value REAL,
+                source          TEXT,
+                update_time     TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_ods_macro_date_name
+                ON ods_macro_indicator (indicator_date, indicator_name);
+        """)
+        conn.commit()
+        conn.close()
+
+    def _load_existing_keys(self):
+        conn = sqlite3.connect(self.db_path)
+        try:
+            df = pd.read_sql(
+                "SELECT indicator_date, indicator_name FROM ods_macro_indicator",
+                conn
+            )
+            return set(zip(df["indicator_date"], df["indicator_name"]))
+        except Exception:
+            return set()
+        finally:
+            conn.close()
+
+    def _already_exists(self, indicator_date, indicator_name):
+        return (indicator_date, indicator_name) in self._existing
+
+    # ================================================================ #
+    # 1. PMI
+    # ================================================================ #
     def load_pmi(self):
         df = ak.macro_china_pmi()
         if df is None or df.empty:
             return None
-        col_date = [c for c in df.columns if "\u65e5\u671f" in c or "date" in c.lower()]
-        col_val  = [c for c in df.columns if "\u5236\u9020\u4e1a" in c or "PMI" in c.upper()]
-        if not col_date or not col_val:
-            return None
-        return float(df.iloc[-1][col_val[0]])
+        rows = []
+        for _, row in df.iterrows():
+            date_str = str(row["月份"]).strip()
+            # "" -> "2026-05-01"
+            if "年" in date_str:
+                date_str = date_str.replace("年", "-").replace("月份", "-01")
+            val = float(row["制造业-指数"])
+            rows.append((date_str, val))
+        return rows
 
+    # ================================================================ #
+    # 2. M2 
+    # ================================================================ #
     def load_m2(self):
-        try:
-            df = ak.macro_china_money_supply()
-            if df is None or df.empty:
-                return None
-            col_m2 = [c for c in df.columns if "M2" in c.upper() and "\u540c\u6bd4" in c]
-            if not col_m2:
-                col_m2 = [c for c in df.columns if "M2" in c.upper()]
-            if not col_m2:
-                return None
-            return float(df.iloc[-1][col_m2[0]])
-        except Exception:
+        df = ak.macro_china_money_supply()
+        if df is None or df.empty:
             return None
+        col = [c for c in df.columns if "M2" in c and "同比" in c]
+        if not col:
+            return None
+        rows = []
+        for _, row in df.iterrows():
+            date_str = str(row["月份"]).strip()
+            if "年" in date_str:
+                date_str = date_str.replace("年", "-").replace("月份", "-01")
+            val = float(row[col[0]])
+            rows.append((date_str, val))
+        return rows
 
+    # ================================================================ #
+    # 3.  
+    # ================================================================ #
     def load_yield_spread(self):
-        try:
-            cn = ak.bond_china_yield(start_date="20200101")
-            us = ak.bond_usa_yield(start_date="20200101", end_date=datetime.now().strftime("%Y%m%d"))
-            if cn is None or cn.empty or us is None or us.empty:
-                return None
-            cn_10y = float(cn.iloc[-1]["10\u5e74\u671f"])
-            us_10y = float(us.iloc[-1]["10\u5e74\u671f"])
-            return round(cn_10y - us_10y, 4)
-        except Exception:
+        df = ak.bond_zh_us_rate()
+        if df is None or df.empty:
             return None
+        cn_col = "中国国债收益率10年"
+        us_col = "美国国债收益率10年"
+        valid = df.dropna(subset=[cn_col, us_col])
+        if valid.empty:
+            return None
+        rows = []
+        for _, row in valid.iterrows():
+            date_str = str(row["日期"]).split(" ")[0]
+            # datetime.date -> str
+            if hasattr(row["日期"], "strftime"):
+                date_str = row["日期"].strftime("%Y-%m-%d")
+            spread = round(float(row[cn_col]) - float(row[us_col]), 4)
+            rows.append((date_str, spread))
+        return rows
 
+    # ================================================================ #
+    # 4. CPI 
+    # ================================================================ #
     def load_cpi(self):
-        try:
-            df = ak.macro_china_cpi_yearly()
-            if df is None or df.empty:
-                return None
-            col = [c for c in df.columns if "\u540c\u6bd4" in c or "CPI" in c.upper()]
-            if not col:
-                return None
-            return float(df.iloc[-1][col[0]])
-        except Exception:
+        df = ak.macro_china_cpi_yearly()
+        if df is None or df.empty:
             return None
+        valid = df.dropna(subset=["今值"])
+        if valid.empty:
+            return None
+        rows = []
+        for _, row in valid.iterrows():
+            date_str = str(row["日期"]).split(" ")[0]
+            if hasattr(row["日期"], "strftime"):
+                date_str = row["日期"].strftime("%Y-%m-%d")
+            val = float(row["今值"])
+            rows.append((date_str, val))
+        return rows
 
+    # ================================================================ #
+    # 5. PPI 
+    # ================================================================ #
     def load_ppi(self):
-        try:
-            df = ak.macro_china_ppi_yearly()
-            if df is None or df.empty:
-                return None
-            col = [c for c in df.columns if "\u540c\u6bd4" in c or "PPI" in c.upper()]
-            if not col:
-                return None
-            return float(df.iloc[-1][col[0]])
-        except Exception:
+        df = ak.macro_china_ppi_yearly()
+        if df is None or df.empty:
             return None
+        valid = df.dropna(subset=["今值"])
+        if valid.empty:
+            return None
+        rows = []
+        for _, row in valid.iterrows():
+            date_str = str(row["日期"]).split(" ")[0]
+            if hasattr(row["日期"], "strftime"):
+                date_str = row["日期"].strftime("%Y-%m-%d")
+            val = float(row["今值"])
+            rows.append((date_str, val))
+        return rows
 
+    # ================================================================ #
+    # 6.  
+    # ================================================================ #
     def load_fed_rate(self):
-        try:
-            df = ak.macro_usa_interest_rate()
-            if df is None or df.empty:
-                return None
-            col = [c for c in df.columns if "\u5229\u7387" in c or "rate" in c.lower()]
-            if not col:
-                return None
-            return float(df.iloc[-1][col[0]])
-        except Exception:
+        df = ak.macro_bank_usa_interest_rate()
+        if df is None or df.empty:
             return None
+        valid = df.dropna(subset=["今值"])
+        if valid.empty:
+            return None
+        rows = []
+        for _, row in valid.iterrows():
+            date_str = str(row["日期"]).split(" ")[0]
+            if hasattr(row["日期"], "strftime"):
+                date_str = row["日期"].strftime("%Y-%m-%d")
+            val = float(row["今值"])
+            rows.append((date_str, val))
+        return rows
 
+    # ================================================================ #
+    # 7.  300 PE
+    # ================================================================ #
     def load_csi300_pe(self):
-        try:
-            df = ak.stock_a_pe(symbol="\u6caa\u6df1300")
-            if df is None or df.empty:
-                df = ak.stock_a_pe_lg(symbol="\u6caa\u6df1300")
-            if df is None or df.empty:
-                return None
-            col = [c for c in df.columns if "PE" in c.upper() or "\u5e02\u76c8\u7387" in c]
-            if not col:
-                return None
-            return float(df.iloc[-1][col[0]])
-        except Exception:
+        df = ak.stock_index_pe_lg()
+        if df is None or df.empty:
             return None
+        rows = []
+        for _, row in df.iterrows():
+            date_str = str(row["日期"]).split(" ")[0]
+            if hasattr(row["日期"], "strftime"):
+                date_str = row["日期"].strftime("%Y-%m-%d")
+            val = float(row["滚动市盈率"])
+            rows.append((date_str, val))
+        return rows
 
+    # ================================================================ #
+    # 8.    ( 22  )
+    # ================================================================ #
     def load_north_flow(self):
-        try:
-            df = ak.stock_hsgt_north_net_flow_in_em(symbol="\u5317\u5411")
-            if df is None or df.empty:
-                return None
-            col = [c for c in df.columns if "\u51c0\u4e70\u5165" in c or "\u51c0\u6d41\u5165" in c]
-            if not col:
-                return None
-            recent = df.head(22)
-            total = recent[col[0]].sum()
-            return float(total)
-        except Exception:
+        df = ak.stock_hsgt_hist_em()
+        if df is None or df.empty:
             return None
+        col = "当日成交净买额"
+        valid = df.dropna(subset=[col])
+        if valid.empty:
+            return None
+        rows = []
+        for _, row in valid.iterrows():
+            date_str = str(row["日期"]).split(" ")[0]
+            if hasattr(row["日期"], "strftime"):
+                date_str = row["日期"].strftime("%Y-%m-%d")
+            val = float(row[col])
+            rows.append((date_str, val))
+        return rows
 
+    # ================================================================ #
+    # fetch_all:  ->  ;  ->  
+    # ================================================================ #
     def fetch_all(self):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        indicator_date = datetime.now().strftime("%Y-%m-%d")
-        rows = []
         indicators = self.config["indicators"]
+        total_new = 0
+        total_skip = 0
+        total_fail = 0
+        all_new_rows = []
+
         for name, cfg in indicators.items():
             ak_func = cfg["ak_func"]
             loader_name = INDICATOR_LOADERS.get(ak_func)
-            value = None
-            if loader_name:
-                try:
-                    fn = getattr(self, loader_name)
-                    value = fn()
-                except Exception:
-                    value = None
-            if value is not None:
-                rows.append([indicator_date, name, value, ak_func, now])
-                print(f"  [{ak_func}] {name} = {value}")
-            else:
-                print(f"  [{ak_func}] {name} = FAILED")
-        self.data = rows
-        print(f"Fetched {len(rows)}/{len(indicators)} indicators")
+            if not loader_name:
+                print(f"  [{ak_func}] {name} = SKIP (no loader)")
+                continue
+            try:
+                fn = getattr(self, loader_name)
+                all_rows = fn()
+                if all_rows is None or len(all_rows) == 0:
+                    print(f"  [{ak_func}] {name} = FAILED (empty)")
+                    total_fail += 1
+                    continue
+                # Filter: only keep rows that don't exist yet
+                new_rows = [
+                    (date_str, val)
+                    for (date_str, val) in all_rows
+                    if not self._already_exists(date_str, name)
+                ]
+                for (date_str, val) in new_rows:
+                    all_new_rows.append((date_str, name, val, ak_func, now))
+                skipped = len(all_rows) - len(new_rows)
+                total_new += len(new_rows)
+                total_skip += skipped
+                print(f"  [{ak_func}] {name} = {len(all_rows)} total, {len(new_rows)} new, {skipped} skip")
+            except Exception as e:
+                print(f"  [WARN] [{ak_func}] {name} ERROR (existing ODS preserved): {e}")
+                traceback.print_exc()
+                total_fail += 1
 
+        self.new_rows = all_new_rows
+        print(f"\nSummary: {total_new} new + {total_skip} skip / {total_fail} fail / {len(indicators)} indicators")
+
+    # ================================================================ #
+    # save: only INSERT new rows, never DELETE
+    # ================================================================ #
     def save_result(self):
+        if not self.new_rows:
+            print("  (no new rows to save)")
+            return
         conn = sqlite3.connect(self.db_path)
-        for row in self.data:
-            conn.execute(
-                "INSERT OR REPLACE INTO ods_macro_indicator (indicator_date, indicator_name, indicator_value, source, update_time) VALUES (?, ?, ?, ?, ?)",
-                row
-            )
+        conn.executemany(
+            "INSERT INTO ods_macro_indicator (indicator_date, indicator_name, indicator_value, source, update_time) VALUES (?, ?, ?, ?, ?)",
+            self.new_rows
+        )
         conn.commit()
         conn.close()
-        print(f"Saved {len(self.data)} rows to ods_macro_indicator")
+        print(f"Saved {len(self.new_rows)} new rows to ods_macro_indicator")
 
     def run(self):
         print("=" * 80)

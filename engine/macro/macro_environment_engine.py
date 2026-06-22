@@ -49,31 +49,70 @@ class MacroEnvironmentEngine(BaseEngine):
     def _calc_trend_score(self, latest_date):
         trend_cfg = self.config["trend"]
         lookback = trend_cfg["lookback_months"]
-        date_series = sorted(self.indicator_df["indicator_date"].unique())
-        if len(date_series) < 2:
-            return 0.0
-        idx = date_series.index(latest_date) if latest_date in date_series else -1
-        if idx <= 0:
-            return 0.0
-        prev_date = date_series[max(0, idx - 1)]
         indicators_cfg = self.config["indicators"]
-        total_weight = sum(v["weight"] for v in indicators_cfg.values()) or 1.0
+        score_ranges = self.config["score_ranges"]
+        all_weights = {name: cfg["weight"] for name, cfg in indicators_cfg.items()}
+        total_weight = sum(all_weights.values()) or 1.0
+
+        # Parse latest_date to datetime
+        try:
+            from datetime import datetime, timedelta
+            eval_dt = datetime.strptime(latest_date, "%Y-%m-%d")
+        except ValueError:
+            return 0.0
+
+        # Compute target date: eval_date - lookback_months
+        target_year = eval_dt.year
+        target_month = eval_dt.month - lookback
+        while target_month <= 0:
+            target_month += 12
+            target_year -= 1
+        target_day = min(eval_dt.day, 28)
+        target_dt = datetime(target_year, target_month, target_day)
+
+        # Window: target_dt +/- 15 days
+        window_start = (target_dt - timedelta(days=15)).strftime("%Y-%m-%d")
+        window_end   = (target_dt + timedelta(days=15)).strftime("%Y-%m-%d")
+
+        # Get current scores (indicator_date <= eval_date, latest per indicator)
+        current = self.indicator_df[self.indicator_df["indicator_date"] <= latest_date]
+        current = current.sort_values("indicator_date").groupby("indicator_name").tail(1)
+
+        # Get comparison scores (indicator_date in window, latest per indicator)
+        compare = self.indicator_df[
+            (self.indicator_df["indicator_date"] >= window_start) &
+            (self.indicator_df["indicator_date"] <= window_end)
+        ]
+        compare = compare.sort_values("indicator_date").groupby("indicator_name").tail(1)
+
+        used_weight = 0.0
         trend_sum = 0.0
-        now_data = self.indicator_df[self.indicator_df["indicator_date"] == latest_date]
-        prev_data = self.indicator_df[self.indicator_df["indicator_date"] == prev_date]
+
         for name, cfg in indicators_cfg.items():
-            w = cfg["weight"] / total_weight
-            n_row = now_data[now_data["indicator_name"] == name]
-            p_row = prev_data[prev_data["indicator_name"] == name]
-            if n_row.empty or p_row.empty:
+            w = cfg["weight"]
+            cur_row = current[current["indicator_name"] == name]
+            cmp_row = compare[compare["indicator_name"] == name]
+            if cur_row.empty or cmp_row.empty:
+                continue  # skip, weight renormalized
+            cur_score = float(cur_row.iloc[0]["score"])
+            cmp_score = float(cmp_row.iloc[0]["score"])
+            delta = cur_score - cmp_score
+            if abs(delta) < 1e-6:
                 continue
-            nv = float(n_row.iloc[0]["indicator_value"])
-            pv = float(p_row.iloc[0]["indicator_value"])
-            diff = nv - pv
-            if abs(diff) < 1e-9:
-                continue
-            trend_sum += (1.0 if diff > 0 else -1.0) * w
-        return round(trend_sum, 4)
+            # Determine sign: reverse indicators invert
+            sr_type = score_ranges.get(name, {}).get("type", "")
+            if sr_type == "\u53cd\u5411":
+                direction = -1.0 if delta > 0 else 1.0
+            else:
+                direction = 1.0 if delta > 0 else -1.0
+            trend_sum += direction * w
+            used_weight += w
+
+        # Normalize by used weight (skip unavailable indicators)
+        if used_weight > 0:
+            trend_sum = trend_sum * (total_weight / used_weight)
+
+        return round(trend_sum / total_weight, 4)
 
     def _determine_acceleration(self, trend_score):
         tc = self.config["trend"]
